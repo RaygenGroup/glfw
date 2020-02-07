@@ -129,6 +129,7 @@ int main(int argc, char** argv)
         }
 
         glfwSetKeyCallback(windows[i], key_callback);
+        glfwSetMouseButtonCallback(windows[i], mouse_button_callback);
 
         glfwMakeContextCurrent(windows[i]);
         gladLoadGL(glfwGetProcAddress);
