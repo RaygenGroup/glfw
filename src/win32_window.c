@@ -52,7 +52,7 @@ static DWORD getWindowStyle(const _GLFWwindow* window)
     if (window->monitor)
         style |= WS_POPUP;
     else if (window->autoBorderless)
-        style |= WS_SYSMENU | WS_MINIMIZEBOX | WS_POPUP | WS_MAXIMIZEBOX | WS_THICKFRAME | WS_CAPTION;
+        style |= WS_POPUP | WS_THICKFRAME | WS_CAPTION | WS_SYSMENU | WS_MINIMIZEBOX |  WS_MAXIMIZEBOX;
     else
     {
         style |= WS_SYSMENU | WS_MINIMIZEBOX;
@@ -79,8 +79,6 @@ static DWORD getWindowExStyle(const _GLFWwindow* window)
 
     if (window->monitor || window->floating)
         style |= WS_EX_TOPMOST;
-    if (window->autoBorderless)
-        style |= WS_EX_TOOLWINDOW; // Gets rid of rounded corners. MSDN documentation does not match the result of this flag.
     return style;
 }
 
@@ -352,8 +350,8 @@ static GLFWbool cursorInContentArea(_GLFWwindow* window)
     if (window->autoBorderless && !window->win32.maximized) {
         area.left += BORDERLESS_BORDER;
         area.right -= BORDERLESS_BORDER;
-        area.top -= BORDERLESS_BORDER;
-        area.bottom += BORDERLESS_BORDER;
+        area.top += BORDERLESS_BORDER;
+        area.bottom -= BORDERLESS_BORDER;
     }
 
     ClientToScreen(window->win32.handle, (POINT*) &area.left);
@@ -578,7 +576,6 @@ static LRESULT CALLBACK windowProc(HWND hWnd, UINT uMsg,
             {
                 if (_glfwIsWindows10AnniversaryUpdateOrGreaterWin32())
                     EnableNonClientDpiScaling(hWnd);
-
                 break;
             }
 
@@ -613,19 +610,26 @@ static LRESULT CALLBACK windowProc(HWND hWnd, UINT uMsg,
 
     switch (uMsg)
     {
+        case WM_ACTIVATE: 
+        {
+            if (window->autoBorderless) {
+                static const MARGINS frame = { 1, 1, 1, 1 };
+                DwmExtendFrameIntoClientArea(window->win32.handle, &frame);
+            }
+        }
         case WM_NCCALCSIZE: 
         {
             if (window->autoBorderless) {
-                if (wParam == TRUE) {
+                if (wParam == TRUE && lParam != FALSE) {
                     NCCALCSIZE_PARAMS* pncsp = ((NCCALCSIZE_PARAMS*)(lParam));
                     if (window->win32.maximized) {
                         adjustMaximizedRect(hWnd, ((NCCALCSIZE_PARAMS*)(lParam))->rgrc);
                     }
                     else {
-                        //pncsp->rgrc[0].left = pncsp->rgrc[0].left + 1;
-                        //pncsp->rgrc[0].top = pncsp->rgrc[0].top + 1;
-                        //pncsp->rgrc[0].right = pncsp->rgrc[0].right - 1;
-                        //pncsp->rgrc[0].bottom = pncsp->rgrc[0].bottom - 1;
+                        //pncsp->rgrc[0].left = pncsp->rgrc[0].left + BORDERLESS_BORDER;
+                        //pncsp->rgrc[0].top = pncsp->rgrc[0].top + BORDERLESS_BORDER;
+                        //pncsp->rgrc[0].right = pncsp->rgrc[0].right - BORDERLESS_BORDER;
+                        //pncsp->rgrc[0].bottom = pncsp->rgrc[0].bottom - BORDERLESS_BORDER;
                     }
                     return 0;
                 }
@@ -1151,7 +1155,7 @@ static LRESULT CALLBACK windowProc(HWND hWnd, UINT uMsg,
                 mmi->ptMaxTrackSize.y = window->maxheight + yoff;
             }
 
-            if (!window->decorated)
+            if (!window->decorated || window->autoBorderless)
             {
                 MONITORINFO mi;
                 const HMONITOR mh = MonitorFromWindow(window->win32.handle,
@@ -1181,14 +1185,20 @@ static LRESULT CALLBACK windowProc(HWND hWnd, UINT uMsg,
             return TRUE;
         }
 
-        case WM_NCACTIVATE:
-        case WM_NCPAINT:
+        case WM_NCACTIVATE: 
         {
             // Prevent title bar from being drawn after restoring a minimized
             // undecorated window
             if (!window->decorated || window->autoBorderless)
                 return TRUE;
-
+            break;
+        }
+        case WM_NCPAINT:
+        {
+            if (!window->decorated)
+                return TRUE;
+            if (window->autoBorderless)
+                SetWindowPos(window->win32.handle, 0, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE);
             break;
         }
 
@@ -1439,7 +1449,7 @@ GLFWbool _glfwRegisterWindowClassWin32(void)
     wc.hInstance     = GetModuleHandleW(NULL);
     wc.hCursor       = LoadCursorW(NULL, IDC_ARROW);
     wc.lpszClassName = _GLFW_WNDCLASSNAME;
-
+    //wc.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
     // Load user-provided icon if available
     wc.hIcon = LoadImageW(GetModuleHandleW(NULL),
                           L"GLFW_ICON", IMAGE_ICON,
@@ -1901,7 +1911,7 @@ void _glfwPlatformSetWindowMonitor(_GLFWwindow* window,
         DWORD style = GetWindowLongW(window->win32.handle, GWL_STYLE);
         UINT flags = SWP_NOACTIVATE | SWP_NOCOPYBITS;
 
-        if (window->decorated)
+        if (window->decorated && !window->autoBorderless)
         {
             style &= ~WS_POPUP;
             style |= getWindowStyle(window);

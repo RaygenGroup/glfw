@@ -145,6 +145,8 @@ static GLFWbool loadLibraries(void)
             GetProcAddress(_glfw.win32.dwmapi.instance, "DwmEnableBlurBehindWindow");
         _glfw.win32.dwmapi.GetColorizationColor = (PFN_DwmGetColorizationColor)
             GetProcAddress(_glfw.win32.dwmapi.instance, "DwmGetColorizationColor");
+        _glfw.win32.dwmapi.ExtendFrameIntoClientArea = (PFN_DwmExtendFrameIntoClientArea)
+            GetProcAddress(_glfw.win32.dwmapi.instance, "DwmExtendFrameIntoClientArea");
     }
 
     _glfw.win32.shcore.instance = LoadLibraryA("shcore.dll");
