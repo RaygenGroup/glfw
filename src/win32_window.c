@@ -37,6 +37,12 @@
 #include <shellapi.h>
 #include <assert.h>
 
+//#define SM_CXPADDEDBORDER 92
+//POINT border;
+//border.x = GetSystemMetrics(SM_CXFRAME) + GetSystemMetrics(SM_CXPADDEDBORDER) - 2;
+//border.y = GetSystemMetrics(SM_CYFRAME) + GetSystemMetrics(SM_CXPADDEDBORDER) - 2;
+#define BORDERLESS_BORDER 6 // TODO: fix this with state (use windows settings)
+
 // Returns the window style for the specified window
 //
 static DWORD getWindowStyle(const _GLFWwindow* window)
@@ -73,7 +79,8 @@ static DWORD getWindowExStyle(const _GLFWwindow* window)
 
     if (window->monitor || window->floating)
         style |= WS_EX_TOPMOST;
-
+    if (window->autoBorderless)
+        style |= WS_EX_TOOLWINDOW; // Gets rid of rounded corners. MSDN documentation does not match the result of this flag.
     return style;
 }
 
@@ -341,6 +348,14 @@ static GLFWbool cursorInContentArea(_GLFWwindow* window)
         return GLFW_FALSE;
 
     GetClientRect(window->win32.handle, &area);
+
+    if (window->autoBorderless && !window->win32.maximized) {
+        area.left += BORDERLESS_BORDER;
+        area.right -= BORDERLESS_BORDER;
+        area.top -= BORDERLESS_BORDER;
+        area.bottom += BORDERLESS_BORDER;
+    }
+
     ClientToScreen(window->win32.handle, (POINT*) &area.left);
     ClientToScreen(window->win32.handle, (POINT*) &area.right);
 
@@ -488,19 +503,15 @@ static void releaseMonitor(_GLFWwindow* window)
     _glfwRestoreVideoModeWin32(window->monitor);
 }
 
-// Window callback function (handles window messages)
-//
-
-static LRESULT hit_test(HWND handle, POINT cursor) {
+static LRESULT hitTestContent(HWND handle, LONG x, LONG y) {
     // identify borders and corners to allow resizing the window.
     // Note: On Windows 10, windows behave differently and
     // allow resizing outside the visible window frame.
     // This implementation does not replicate that behavior.
     
-#define SM_CXPADDEDBORDER 92
     POINT border;
-    border.x = GetSystemMetrics(SM_CXFRAME) + GetSystemMetrics(SM_CXPADDEDBORDER);
-    border.y = GetSystemMetrics(SM_CYFRAME) + GetSystemMetrics(SM_CXPADDEDBORDER);
+    border.x = BORDERLESS_BORDER;
+    border.y = BORDERLESS_BORDER;
     
     RECT window;
     if (!GetWindowRect(handle, &window)) {
@@ -516,10 +527,10 @@ static LRESULT hit_test(HWND handle, POINT cursor) {
     };
 
     const auto result =
-        left * (cursor.x < (window.left + border.x)) |
-        right * (cursor.x >= (window.right - border.x)) |
-        top * (cursor.y < (window.top + border.y)) |
-        bottom * (cursor.y >= (window.bottom - border.y));
+        left * (x < (window.left + border.x)) |
+        right * (x >= (window.right - border.x)) |
+        top * (y < (window.top + border.y)) |
+        bottom * (y >= (window.bottom - border.y));
 
     switch (result) {
     case left: return HTLEFT;
@@ -550,6 +561,8 @@ void adjustMaximizedRect(HWND window, RECT* rect) {
     *rect = info.rcWork;
 }
 
+// Window callback function (handles window messages)
+//
 static LRESULT CALLBACK windowProc(HWND hWnd, UINT uMsg,
                                    WPARAM wParam, LPARAM lParam)
 {
@@ -604,8 +617,15 @@ static LRESULT CALLBACK windowProc(HWND hWnd, UINT uMsg,
         {
             if (window->autoBorderless) {
                 if (wParam == TRUE) {
+                    NCCALCSIZE_PARAMS* pncsp = ((NCCALCSIZE_PARAMS*)(lParam));
                     if (window->win32.maximized) {
                         adjustMaximizedRect(hWnd, ((NCCALCSIZE_PARAMS*)(lParam))->rgrc);
+                    }
+                    else {
+                        //pncsp->rgrc[0].left = pncsp->rgrc[0].left + 1;
+                        //pncsp->rgrc[0].top = pncsp->rgrc[0].top + 1;
+                        //pncsp->rgrc[0].right = pncsp->rgrc[0].right - 1;
+                        //pncsp->rgrc[0].bottom = pncsp->rgrc[0].bottom - 1;
                     }
                     return 0;
                 }
@@ -613,11 +633,9 @@ static LRESULT CALLBACK windowProc(HWND hWnd, UINT uMsg,
         }
         case WM_NCHITTEST: {
             if (window->autoBorderless) {
-                POINT p;
-                p.x = GET_X_LPARAM(lParam);
-                p.y = GET_Y_LPARAM(lParam);
-                if (hit_test(hWnd, p) != HTNOWHERE) {
-                    return hit_test(hWnd, p);
+                LRESULT result = hitTestContent(hWnd, GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam));
+                if (result != HTNOWHERE) {
+                    return result;
                 }
                 break;
             }
