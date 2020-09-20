@@ -204,6 +204,7 @@ GLFWAPI GLFWwindow* glfwCreateWindow(int width, int height,
     window->floating         = wndconfig.floating;
     window->focusOnShow      = wndconfig.focusOnShow;
     window->mousePassthrough = wndconfig.mousePassthrough;
+    window->autoBorderless   = wndconfig.autoBorderless;
     window->cursorMode       = GLFW_CURSOR_NORMAL;
 
     window->minwidth    = GLFW_DONT_CARE;
@@ -384,6 +385,9 @@ GLFWAPI void glfwWindowHint(int hint, int value)
             return;
         case GLFW_MOUSE_PASSTHROUGH:
             _glfw.hints.window.mousePassthrough = value ? GLFW_TRUE : GLFW_FALSE;
+            return;
+        case GLFW_AUTOBORDERLESS:
+            _glfw.hints.window.autoBorderless = value ? GLFW_TRUE : GLFW_FALSE;
             return;
         case GLFW_CLIENT_API:
             _glfw.hints.context.client = value;
@@ -864,6 +868,8 @@ GLFWAPI int glfwGetWindowAttrib(GLFWwindow* handle, int attrib)
             return window->floating;
         case GLFW_AUTO_ICONIFY:
             return window->autoIconify;
+        case GLFW_AUTOBORDERLESS:
+            return window->autoBorderless;       
         case GLFW_CLIENT_API:
             return window->context.client;
         case GLFW_CONTEXT_CREATION_API:
@@ -939,6 +945,13 @@ GLFWAPI void glfwSetWindowAttrib(GLFWwindow* handle, int attrib, int value)
 
         window->mousePassthrough = value;
         _glfwPlatformSetWindowMousePassthrough(window, value);
+    }
+    else if (attrib == GLFW_AUTOBORDERLESS) {
+        if (window->autoBorderless == value)
+            return;
+
+        window->autoBorderless = value;
+        // TODO: support live change to borderless
     }
     else
         _glfwInputError(GLFW_INVALID_ENUM, "Invalid window attribute 0x%08X", attrib);

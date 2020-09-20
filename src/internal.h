@@ -272,6 +272,7 @@ struct _GLFWwndconfig
     GLFWbool      focusOnShow;
     GLFWbool      mousePassthrough;
     GLFWbool      scaleToMonitor;
+    GLFWbool      autoBorderless;
     struct {
         GLFWbool  retina;
         char      frameName[256];
@@ -383,6 +384,7 @@ struct _GLFWwindow
     GLFWbool            focusOnShow;
     GLFWbool            mousePassthrough;
     GLFWbool            shouldClose;
+    GLFWbool            autoBorderless; // (currently windows only, otherwise ignored)
     void*               userPointer;
     GLFWvidmode         videoMode;
     _GLFWmonitor*       monitor;

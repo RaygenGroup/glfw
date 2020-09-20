@@ -901,6 +901,12 @@ extern "C" {
  *  [window attribute](@ref GLFW_MOUSE_PASSTHROUGH_attrib).
  */
 #define GLFW_MOUSE_PASSTHROUGH      0x0002000D
+ /*! @brief Resizeable borderless window
+  *
+  *  Resizeable borderless window [window hint](@ref GLFW_AUTOBORDERLESS_hint) or
+  *  [window attribute](@ref GLFW_AUTOBORDERLESS_attrib).
+  */
+#define GLFW_AUTOBORDERLESS      0x000200FF  // NOTE: Not sequential to the original implementation to avoid collisions when upgrading
 
 /*! @brief Framebuffer bit depth hint.
  *

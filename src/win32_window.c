@@ -45,6 +45,8 @@ static DWORD getWindowStyle(const _GLFWwindow* window)
 
     if (window->monitor)
         style |= WS_POPUP;
+    else if (window->autoBorderless)
+        style |= WS_SYSMENU | WS_MINIMIZEBOX | WS_POPUP | WS_MAXIMIZEBOX | WS_THICKFRAME | WS_CAPTION;
     else
     {
         style |= WS_SYSMENU | WS_MINIMIZEBOX;
@@ -488,6 +490,66 @@ static void releaseMonitor(_GLFWwindow* window)
 
 // Window callback function (handles window messages)
 //
+
+static LRESULT hit_test(HWND handle, POINT cursor) {
+    // identify borders and corners to allow resizing the window.
+    // Note: On Windows 10, windows behave differently and
+    // allow resizing outside the visible window frame.
+    // This implementation does not replicate that behavior.
+    
+#define SM_CXPADDEDBORDER 92
+    POINT border;
+    border.x = GetSystemMetrics(SM_CXFRAME) + GetSystemMetrics(SM_CXPADDEDBORDER);
+    border.y = GetSystemMetrics(SM_CYFRAME) + GetSystemMetrics(SM_CXPADDEDBORDER);
+    
+    RECT window;
+    if (!GetWindowRect(handle, &window)) {
+        return HTNOWHERE;
+    }
+
+    enum region_mask {
+        client = 0b0000,
+        left = 0b0001,
+        right = 0b0010,
+        top = 0b0100,
+        bottom = 0b1000,
+    };
+
+    const auto result =
+        left * (cursor.x < (window.left + border.x)) |
+        right * (cursor.x >= (window.right - border.x)) |
+        top * (cursor.y < (window.top + border.y)) |
+        bottom * (cursor.y >= (window.bottom - border.y));
+
+    switch (result) {
+    case left: return HTLEFT;
+    case right: return HTRIGHT;
+    case top: return HTTOP;
+    case bottom: return HTBOTTOM ;
+    case top | left: return HTTOPLEFT;
+    case top | right: return HTTOPRIGHT;
+    case bottom | left: return HTBOTTOMLEFT;
+    case bottom | right: return HTBOTTOMRIGHT;
+    default: return HTNOWHERE;
+    }
+}
+
+// Fill the proper work area for a maximized window
+void adjustMaximizedRect(HWND window, RECT* rect) {
+    HMONITOR monitor = MonitorFromWindow(window, MONITOR_DEFAULTTONULL);
+    MONITORINFO info;
+    if (!monitor) {
+        return;
+    }
+    
+    info.cbSize = sizeof(info);
+    if (!GetMonitorInfoW(monitor, &info)) {
+        return;
+    }
+
+    *rect = info.rcWork;
+}
+
 static LRESULT CALLBACK windowProc(HWND hWnd, UINT uMsg,
                                    WPARAM wParam, LPARAM lParam)
 {
@@ -538,6 +600,28 @@ static LRESULT CALLBACK windowProc(HWND hWnd, UINT uMsg,
 
     switch (uMsg)
     {
+        case WM_NCCALCSIZE: 
+        {
+            if (window->autoBorderless) {
+                if (wParam == TRUE) {
+                    if (window->win32.maximized) {
+                        adjustMaximizedRect(hWnd, ((NCCALCSIZE_PARAMS*)(lParam))->rgrc);
+                    }
+                    return 0;
+                }
+            }
+        }
+        case WM_NCHITTEST: {
+            if (window->autoBorderless) {
+                POINT p;
+                p.x = GET_X_LPARAM(lParam);
+                p.y = GET_Y_LPARAM(lParam);
+                if (hit_test(hWnd, p) != HTNOWHERE) {
+                    return hit_test(hWnd, p);
+                }
+                break;
+            }
+        }
         case WM_MOUSEACTIVATE:
         {
             // HACK: Postpone cursor disabling when the window was activated by
@@ -1084,7 +1168,7 @@ static LRESULT CALLBACK windowProc(HWND hWnd, UINT uMsg,
         {
             // Prevent title bar from being drawn after restoring a minimized
             // undecorated window
-            if (!window->decorated)
+            if (!window->decorated || window->autoBorderless)
                 return TRUE;
 
             break;
