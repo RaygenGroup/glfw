@@ -1809,8 +1809,26 @@ void _glfwPlatformFocusWindow(_GLFWwindow* window)
 
 void _glfwPlatformDragWindow(_GLFWwindow* window)
 {
+    int i;
+
     ReleaseCapture();
     SendMessage(window->win32.handle, WM_NCLBUTTONDOWN, HTCAPTION, 0);
+    
+    // 'Fix' mouse button state: (lost when ReleaseCapture is called)
+    for (i = 0; i <= GLFW_MOUSE_BUTTON_5; i++) {
+        SHORT val;
+        switch (i) {
+        case GLFW_MOUSE_BUTTON_LEFT: val = GetKeyState(VK_LBUTTON); break;
+        case GLFW_MOUSE_BUTTON_RIGHT: val = GetKeyState(VK_RBUTTON); break;
+        case GLFW_MOUSE_BUTTON_MIDDLE: val = GetKeyState(VK_MBUTTON); break;
+        case GLFW_MOUSE_BUTTON_4: val = GetKeyState(VK_XBUTTON1); break;
+        case GLFW_MOUSE_BUTTON_5: val = GetKeyState(VK_XBUTTON2); break;
+        }
+
+        if ((val < 0) != window->mouseButtons[i]) {
+            _glfwInputMouseClick(window, i, (val < 0) ? GLFW_PRESS : GLFW_RELEASE, getKeyMods());
+        }
+    }
 }
 
 void _glfwPlatformResizeWindow(_GLFWwindow* window, int border)
