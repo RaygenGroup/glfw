@@ -627,7 +627,7 @@ static LRESULT CALLBACK windowProc(HWND hWnd, UINT uMsg,
         case WM_ACTIVATE: 
         {
             if (window->autoBorderless) {
-                static const MARGINS frame = { 1, 1, 1, 1 };
+                const MARGINS frame = { 1, 1, 1, 1 };
                 DwmExtendFrameIntoClientArea(window->win32.handle, &frame);
             }
             break;
