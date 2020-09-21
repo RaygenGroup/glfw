@@ -543,8 +543,22 @@ static LRESULT hitTestContent(HWND handle, LONG x, LONG y) {
     }
 }
 
-// Fill the proper work area for a maximized window
-void adjustMaximizedRect(HWND window, RECT* rect) {
+void calcSizeAutoBorderless(HWND window, NCCALCSIZE_PARAMS* params) {
+    // Detect fullscreen. If not fullscreen fill the whole area, in fullscreen fill the screen
+    params->rgrc[0].left = params->lppos->x;
+    params->rgrc[0].right = params->lppos->x + params->lppos->cx;
+    params->rgrc[0].top = params->lppos->y;
+    params->rgrc[0].bottom = params->lppos->y + params->lppos->cy;
+
+    WINDOWPLACEMENT placement;
+    if (!GetWindowPlacement(window, &placement)) {
+        return;
+    }
+
+    if (placement.showCmd != SW_MAXIMIZE) {
+        return;
+    }
+
     HMONITOR monitor = MonitorFromWindow(window, MONITOR_DEFAULTTONULL);
     MONITORINFO info;
     if (!monitor) {
@@ -556,7 +570,7 @@ void adjustMaximizedRect(HWND window, RECT* rect) {
         return;
     }
 
-    *rect = info.rcWork;
+    params->rgrc[0] = info.rcWork;
 }
 
 // Window callback function (handles window messages)
@@ -616,24 +630,17 @@ static LRESULT CALLBACK windowProc(HWND hWnd, UINT uMsg,
                 static const MARGINS frame = { 1, 1, 1, 1 };
                 DwmExtendFrameIntoClientArea(window->win32.handle, &frame);
             }
+            break;
         }
         case WM_NCCALCSIZE: 
         {
             if (window->autoBorderless) {
-                if (wParam == TRUE && lParam != FALSE) {
-                    NCCALCSIZE_PARAMS* pncsp = ((NCCALCSIZE_PARAMS*)(lParam));
-                    if (window->win32.maximized) {
-                        adjustMaximizedRect(hWnd, ((NCCALCSIZE_PARAMS*)(lParam))->rgrc);
-                    }
-                    else {
-                        //pncsp->rgrc[0].left = pncsp->rgrc[0].left + BORDERLESS_BORDER;
-                        //pncsp->rgrc[0].top = pncsp->rgrc[0].top + BORDERLESS_BORDER;
-                        //pncsp->rgrc[0].right = pncsp->rgrc[0].right - BORDERLESS_BORDER;
-                        //pncsp->rgrc[0].bottom = pncsp->rgrc[0].bottom - BORDERLESS_BORDER;
-                    }
+                if (wParam == TRUE) {
+                    calcSizeAutoBorderless(hWnd, (NCCALCSIZE_PARAMS*)(lParam));
                     return 0;
                 }
             }
+            break;
         }
         case WM_NCHITTEST: {
             if (window->autoBorderless) {
@@ -641,8 +648,9 @@ static LRESULT CALLBACK windowProc(HWND hWnd, UINT uMsg,
                 if (result != HTNOWHERE) {
                     return result;
                 }
-                break;
+                return HTCLIENT;
             }
+            break;
         }
         case WM_MOUSEACTIVATE:
         {
@@ -1197,8 +1205,9 @@ static LRESULT CALLBACK windowProc(HWND hWnd, UINT uMsg,
         {
             if (!window->decorated)
                 return TRUE;
-            if (window->autoBorderless)
-                SetWindowPos(window->win32.handle, 0, 0, 0, 0, 0, SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE);
+            if (window->autoBorderless) {
+                return DefWindowProcW(hWnd, uMsg, wParam, lParam);
+            }
             break;
         }
 
@@ -1426,6 +1435,12 @@ static int createNativeWindow(_GLFWwindow* window,
     {
         updateFramebufferTransparency(window);
         window->win32.transparent = GLFW_TRUE;
+    }
+
+    if (window->autoBorderless) {
+        // Force WM_NCCALCSIZE to write over the windows title bar
+        SetWindowPos(window->win32.handle, NULL, 0, 0, 0, 0, 
+                     SWP_FRAMECHANGED | SWP_NOACTIVATE | SWP_NOZORDER | SWP_NOMOVE | SWP_NOSIZE);
     }
 
     return GLFW_TRUE;
