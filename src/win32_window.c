@@ -42,6 +42,7 @@
 //border.x = GetSystemMetrics(SM_CXFRAME) + GetSystemMetrics(SM_CXPADDEDBORDER) - 2;
 //border.y = GetSystemMetrics(SM_CYFRAME) + GetSystemMetrics(SM_CXPADDEDBORDER) - 2;
 #define BORDERLESS_BORDER 6 // TODO: fix this with state (use windows settings)
+#define SIZEMOVE_TIMER_ID 1001
 
 // Returns the window style for the specified window
 //
@@ -1063,6 +1064,7 @@ static LRESULT CALLBACK windowProc(HWND hWnd, UINT uMsg,
         case WM_EXITSIZEMOVE:
         case WM_EXITMENULOOP:
         {
+
             if (window->win32.frameAction)
                 break;
 
