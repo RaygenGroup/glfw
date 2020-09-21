@@ -1050,6 +1050,10 @@ static LRESULT CALLBACK windowProc(HWND hWnd, UINT uMsg,
         case WM_ENTERSIZEMOVE:
         case WM_ENTERMENULOOP:
         {
+            // Add timer that triggers an event every 100ms, this 
+            // way we can repaint our window on this event.
+            SetTimer(hWnd, SIZEMOVE_TIMER_ID, 100, (TIMERPROC)NULL);
+
             if (window->win32.frameAction)
                 break;
 
@@ -1064,6 +1068,8 @@ static LRESULT CALLBACK windowProc(HWND hWnd, UINT uMsg,
         case WM_EXITSIZEMOVE:
         case WM_EXITMENULOOP:
         {
+            // Stop the timer for drag/size repaing
+            KillTimer(hWnd, SIZEMOVE_TIMER_ID);
 
             if (window->win32.frameAction)
                 break;
@@ -1076,6 +1082,15 @@ static LRESULT CALLBACK windowProc(HWND hWnd, UINT uMsg,
             break;
         }
 
+        case WM_TIMER: {
+            // Submit paint callback to the user when the redraw timer occurs (only during size / move) 
+            if (wParam == SIZEMOVE_TIMER_ID) {
+                _glfwInputWindowDamage(window);
+            }
+            
+            break;
+        }
+        
         case WM_SIZE:
         {
             const GLFWbool iconified = wParam == SIZE_MINIMIZED;
